@@ -1,4 +1,5 @@
 //import java.io.FileWriter;
+//implemented dma lock
 
 public class Mmu implements Memory{
     //FileWriter writer;
@@ -20,6 +21,9 @@ public class Mmu implements Memory{
     int TMA = 0;
     int TAC = 0;
 
+    boolean dmaLock = false;
+    int dmaLockCount = 0;
+
     public Mmu(Cpu cpu, Ppu ppu, Apu apu, Catridge catridge, InputOutputDevices inputOutputDevices){
         this.cpu = cpu;
         this.ppu = ppu;
@@ -34,18 +38,18 @@ public class Mmu implements Memory{
 
     @Override
     public void write(int address, int value){
-
-        if (address == 0xFF01) {
-        System.out.print((char)value);
-        System.out.flush();
+        if(address == 0xFF50 && value != 0 && this.gb.bootActive){
+            this.gb.bootActive = false;
         }
-
-        if (address == 0xFF02 && value == 0x81) {
-        System.out.print((char) this.read(0xFF01));
-        System.out.flush();
+        else if(this.dmaLock){
+            if(address >= 0xFF80 && address <= 0xFFFE){
+                this.HRAM[address - 0xFF80] = value;
+            }
+            else if(address >= 0xFF00 && address <= 0xFF7F){
+                this.inputOutputDevices.write(address, value);
+            }
         }
-
-        if(address == 0xFF0F){
+        else if(address == 0xFF0F){
             writeToInterruptRegs(value, ifRegister);
         }
         else if(address == 0xFFFF){
@@ -94,11 +98,24 @@ public class Mmu implements Memory{
         }
     }
     
-    //have yet to implement dma lock
     @Override
     public int read(int address){
 
-        if(address == 0xFF0F){
+        if(address < 0x100 && this.gb.bootActive){
+            return this.gb.bootRom[address];
+        }
+        else if(this.dmaLock){
+            if(address >= 0xFF80 && address <= 0xFFFE){
+                return this.HRAM[address - 0xFF80];
+            }
+            else if(address >= 0xFF00 && address <= 0xFF7F){
+                return this.inputOutputDevices.read(address);
+            }
+            else{
+                return 0xFF;
+            }
+        }
+        else if(address == 0xFF0F){
             return readFromInterruptRegs(ifRegister);
         }
         else if(address == 0xFFFF){

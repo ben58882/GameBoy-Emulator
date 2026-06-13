@@ -3,7 +3,7 @@ public class Cpu{
     int sp = 0;
     boolean isStopped = false;
     boolean isHalted = false;
-    boolean IME = true;
+    boolean IME = false;
     private int[] registers = new int[8]; // A, B, C, D, E, H, L
     private int[] flags = new int[8];
 

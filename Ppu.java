@@ -4,7 +4,7 @@ public class Ppu implements Memory{
     private int[] OAM = new int[0xA0]; //0xFE00 - 0xFE9F
     private static int vramAdjust = 0x8000;
     private static int oamAdjust = 0xFE00;
-    private boolean ppuPower = true;
+    private boolean ppuPower = false;
 
     /*
     * Game Boy PPU Registers (0xFF40 - 0xFF4B)
@@ -34,7 +34,7 @@ public class Ppu implements Memory{
 
         this.display = new GameBoyDisplay();
         this.gb = gb;
-
+        /* 
         //THIS IS ONLY CORRECT FOR INITIALISING pc = 0x0100
         this.register[0] = 0x91;
         this.register[1] = 0x82;
@@ -42,6 +42,7 @@ public class Ppu implements Memory{
         this.register[8] = 0xFF;
         this.register[9] = 0xFF;
         this.register[6] = 0xFF;
+        */
     }
 
     @Override 
@@ -87,6 +88,8 @@ public class Ppu implements Memory{
                     int data = this.gb.mmu.read(sourceAddress + i); 
                     this.OAM[i] = data;
                 }
+                this.gb.mmu.dmaLock = true;
+                this.gb.mmu.dmaLockCount = 160;
             }
             else{
                 this.register[address - 0xFF40] = value;
@@ -124,6 +127,7 @@ public class Ppu implements Memory{
                 if (this.cycleCounter >= 51) {
                     this.cycleCounter -= 51;
                     this.register[4]++;
+                    //System.out.println(this.register[4]);
                     updateLYCompare(); 
                     
                     if (this.register[4] == 144) {
@@ -139,6 +143,7 @@ public class Ppu implements Memory{
                 if (this.cycleCounter >= 114) {
                     this.cycleCounter -= 114;
                     this.register[4]++;
+                    //System.out.println(this.register[4]);
                     updateLYCompare(); 
                     
                     if (this.register[4] > 153) {
@@ -185,12 +190,14 @@ public class Ppu implements Memory{
             this.register[1] &= 0xFB;
         }
     }
-
+    //bug fix bg priority
+    //bug fix added hud
     private void drawScanline(){
 
         int frameArrIdx = (this.register[4] & 0xFF) * 160;
         int baseAddress = (this.register[0] & 0x8) == 0 ? 0x9800 : 0x9C00;
         int tile_data_base = (this.register[0] & 0x10) == 0 ? 0x9000 : 0x8000;
+        int[] bgColor = new int[160];
 
         for(int i = 0; i < 160; i++){
             int y_pos = (this.register[4] + this.register[2]) & 0xFF;
@@ -203,10 +210,36 @@ public class Ppu implements Memory{
             int x_pos_within_tile = x_pos % 8;
             int byte1 = this.VRAM[tile_data_base + (signed_tile_id * 16) + (line_within_tile * 2) - vramAdjust];
             int byte2 = this.VRAM[tile_data_base + (signed_tile_id * 16) + (line_within_tile * 2) + 1 - vramAdjust];
+            bgColor[i] = getColorID(byte1, byte2, x_pos_within_tile);
             this.display.pixelBuffer[frameArrIdx] = this.calculateColor(byte1, byte2, x_pos_within_tile, false, false);
             frameArrIdx++;
         }
 
+        // added hud
+        boolean windowEnabled = (this.register[0] & 0x20) != 0;
+        if(windowEnabled && this.register[4] >= this.register[10]){
+            int windowY = this.register[4] - this.register[10];
+            int windowBase = (this.register[0] & 0x40) == 0 ? 0x9800 : 0x9C00;
+            for(int i = 0; i < 160; i++){
+                int wx = this.register[11] - 7;
+                if(i < wx) continue;
+                int x_pos = i - wx;
+                int tile_x = x_pos / 8;
+                int tile_y = windowY / 8;
+                byte tile_id = (byte)(this.VRAM[windowBase + (tile_y * 32) + tile_x - vramAdjust]);
+                int signed_tile_id = tile_data_base == 0x9000 ? (int)tile_id : (int)tile_id & 0xFF;
+                int line_within_tile = windowY % 8;
+                int x_within = x_pos % 8;
+                int b1 = this.VRAM[tile_data_base + (signed_tile_id * 16) + (line_within_tile * 2) - vramAdjust];
+                int b2 = this.VRAM[tile_data_base + (signed_tile_id * 16) + (line_within_tile * 2) + 1 - vramAdjust];
+                this.display.pixelBuffer[(this.register[4] & 0xFF) * 160 + i] =
+                    this.calculateColor(b1, b2, x_within, false, false);
+            }
+        }
+        //^^ added hud
+        if((this.register[0] & 2) == 0){
+            return;
+        }
         int spriteHeight = (this.register[0] & 4) == 0 ? 8 : 16;
         int[] sprites = new int[40];
         int spritesIdx = 0;
@@ -238,7 +271,7 @@ public class Ppu implements Memory{
             int byte2 = this.VRAM[tileAddress + (row * 2) + 1 - vramAdjust];
             for (int p = 0; p < 8; p++) {
                 int pixel_x = x + p;
-                if (pixel_x < 0 || pixel_x >= 160) {
+                if (pixel_x < 0 || pixel_x >= 160) { 
                     continue; 
                 }
                 int col = (attributes & 0x20) == 0 ? p : 7 - p; 
@@ -246,9 +279,16 @@ public class Ppu implements Memory{
                 if (color == -1) { 
                     continue; 
                 }
+                if(bgColor[pixel_x] != 0 && (attributes & 0x80) != 0){
+                    continue;
+                }
                 this.display.pixelBuffer[(this.register[4] & 0xFF) * 160 + pixel_x] = color;
             }
         }
+    }
+
+    private int getColorID(int byte1, int byte2, int x){
+        return (((byte2 >> (7 - x)) & 1) << 1) | ((byte1 >> (7 - x)) & 1);
     }
 
     private int calculateColor(int byte1, int byte2, int x, boolean sprite, boolean bit4){

@@ -1,28 +1,34 @@
 public class Catridge implements Memory{
-    private int[] romBank = new int[0x8000];
+    /* 
+    private int[] romBank;
     private int[] externalRam = new int[0x2000];
+    */
+    
+    private MemoryBankController mbc;
 
     public Catridge(byte[] rom){
-        for(int i = 0; i < rom.length; i++){
-            romBank[i] = rom[i] & 0xFF;
+        byte mbcType = rom[0x0147];
+        System.out.println(mbcType);
+        switch(mbcType){
+            case 0x00:
+            case 0x09:
+                this.mbc = new MemoryBankControllerZero(rom);
+                break;
+            case 0x01:
+            case 0x02:
+            case 0x03:
+                this.mbc = new MemoryBankControllerOne(rom);
+                break;
         }
     }
 
     @Override
     public void write(int address, int value){
-        if(address >= 0xA000 && address <= 0xBFFF){
-            externalRam[address - 0xA000] = value;
-        }
+        this.mbc.write(address, value);
     }
 
     @Override
     public int read(int address){
-        if(address <= 0x7FFF){
-            return romBank[address];
-        }
-        else{
-            return externalRam[address - 0xA000];
-        }
+        return this.mbc.read(address);
     }
-
 }

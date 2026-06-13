@@ -1,4 +1,8 @@
 //halt bug NOT implemented yet
+//soft reset not impelemnted yet
+
+import java.io.FileWriter;
+
 public class Gameboy{
     Cpu cpu;
     Mmu mmu;
@@ -6,9 +10,12 @@ public class Gameboy{
     Apu apu;
     InputOutputDevices ioDevices;
     Catridge catridge;
-    private long mCycles = 0;
     long tCycleTrackDiv = 0;
     long tCycleTrackTima = 0;
+    int[] bootRom = new int[256];
+    boolean bootActive = true;
+    boolean printPC = false;
+    FileWriter f;
 
     public Gameboy(Catridge catridge){
         this.cpu = new Cpu();
@@ -18,10 +25,22 @@ public class Gameboy{
         this.catridge = catridge;
         this.mmu = new Mmu(cpu, ppu, apu, catridge, ioDevices);
         this.mmu.loadGameBoyClass(this);
-        cpu.pc = 0x100; // The standard entry point for all cartridges
+        cpu.pc = 0x0; // The standard entry point for all cartridges
         cpu.sp = 0xFFFE;
+        this.loadBoot();
+        try{
+            f = new FileWriter("output.txt");
+        }
+        catch(Exception e){}
     }
 
+    private void loadBoot(){
+        byte[] tmp = FileParser.parse("dmg_boot_256.bin");
+        for(int i = 0; i < 256; i++){
+            bootRom[i] = tmp[i] & 0xFF;
+        }
+    }
+    //fixed bug ppu runs even in halt
     public void run(){
 
         if(checkInterrupt()){
@@ -31,7 +50,7 @@ public class Gameboy{
 
         if(this.cpu.isHalted){
             tick(1);
-            this.mCycles++;
+            this.ppu.step(1);
             for(int i = 0; i <= 4; i++){
                 if(this.mmu.ieRegister[i] == 1 && this.mmu.ifRegister[i] == 1){
                     this.cpu.isHalted = false;
@@ -42,8 +61,6 @@ public class Gameboy{
         }
 
         long currMCycle = this.decode();
-
-        this.mCycles += currMCycle;
 
         this.ppu.step((int)currMCycle);
 
@@ -66,9 +83,9 @@ public class Gameboy{
 
         if(this.cpu.IME){
             this.cpu.IME = false;
+            this.cpu.isHalted = false;
             this.mmu.pushStack(this.cpu.pc);
             this.cpu.pc = jumpVector;
-            this.mCycles += 5;
             this.mmu.ifRegister[(jumpVector - 0x40) / 0x8] = 0;
             return true;
         }
@@ -81,6 +98,13 @@ public class Gameboy{
 
         this.tCycleTrackDiv += mCycleIncrement * 4;
         this.tCycleTrackTima += mCycleIncrement * 4;
+
+        if(this.mmu.dmaLock){
+            this.mmu.dmaLockCount -= mCycleIncrement;
+            if(this.mmu.dmaLockCount <= 0){
+                this.mmu.dmaLock = false;
+            }
+        }
 
         if((this.mmu.TAC & 4 )!= 0){
             int speed = this.mmu.TAC & 0x3;
@@ -117,6 +141,12 @@ public class Gameboy{
 
     public int decode(){
         int curr = this.mmu.read(this.cpu.pc);
+        if(printPC){
+            try{
+                this.f.write("PC VALUE: " + this.cpu.pc + "| Opcode: " + curr + "\n");
+            }
+            catch(Exception e){}
+        }
         if(curr == 0xCB){
             this.cpu.pc++;
             curr = this.mmu.read(this.cpu.pc);
