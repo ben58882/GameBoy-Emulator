@@ -69,5 +69,8 @@ ARROW buttons mapped to ARROW keys.
 Uses sameboy's boot rom
 https://github.com/libretro/SameBoy
 
+Generated custom boot up logo via catskull logo generator website
+https://catskull.net/GB-Logo-Generator/
+
 
 
