@@ -13,7 +13,10 @@ Pixel accurate rendering of sprites, background and window.
 ROMS
 Supports stand alone catridges, mbc1, mbc2 and mbc3 roms with timer and saved files support.
 
+Custom bootup logo showing my github username.
+
 Features I hope to impelment:
+
 APU for audio
 mbc5, mbc6 and mbc7 support
 
@@ -34,6 +37,11 @@ B button mapped to S key on keyboard
 START button mapped to ENTER key on keyboard
 SELECT button mapped to LEFT SHIFT key on keyboard
 ARROW buttons mapped to ARROW keys.
+
+Credits:
+
+Uses sameboy's boot rom
+https://github.com/libretro/SameBoy
 
 
 
