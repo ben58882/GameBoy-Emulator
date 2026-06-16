@@ -1,4 +1,7 @@
+
 import java.awt.*;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.awt.image.*;
 import javax.swing.*;
 
@@ -11,12 +14,14 @@ public class GameBoyDisplay {
     private final BufferStrategy bs;
     private final BufferedImage image;
     public JFrame frame;
+    public Ppu ppu;
     
     // This is the array your PPU will write to directly
     public final int[] pixelBuffer; 
 
-    public GameBoyDisplay() {
+    public GameBoyDisplay(Ppu ppu) {
         // 1. Setup the raw OS window (Canvas)
+        this.ppu = ppu;
         frame = new JFrame("Game Boy");
         canvas = new Canvas();
         canvas.setPreferredSize(new Dimension(width * scale, height * scale));
@@ -25,8 +30,16 @@ public class GameBoyDisplay {
         frame.add(canvas);
         frame.pack();
         frame.setLocationRelativeTo(null);
-        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        frame.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
         frame.setVisible(true);
+        frame.addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosing(WindowEvent e){
+                GameBoyDisplay.this.ppu.gb.catridge.saveRam();
+                e.getWindow().dispose();
+                System.exit(0);
+            }
+        });
 
         // 2. Initialize hardware double-buffering
         canvas.createBufferStrategy(2);

@@ -24,14 +24,22 @@ public class Mmu implements Memory{
     boolean dmaLock = false;
     int dmaLockCount = 0;
 
+    int[] logo = new int[48];
+
     public Mmu(Cpu cpu, Ppu ppu, Apu apu, Catridge catridge, InputOutputDevices inputOutputDevices){
         this.cpu = cpu;
         this.ppu = ppu;
         this.apu = apu;
         this.catridge = catridge;
         this.inputOutputDevices = inputOutputDevices;
+        this.loadLogo();
     }
-
+    private void loadLogo(){
+        byte[] tmp = FileParser.parse("extracted_logo.bin");
+        for(int i = 0; i < 48; i++){
+            logo[i] = (int)tmp[i] & 0xFF;
+        }
+    }
     public void loadGameBoyClass(Gameboy gb){
         this.gb = gb;
     }
@@ -103,6 +111,9 @@ public class Mmu implements Memory{
 
         if(address < 0x100 && this.gb.bootActive){
             return this.gb.bootRom[address];
+        }
+        else if(address >= 0x104 && address <= 0x133 && this.gb.bootActive){
+            return this.logo[address - 0x104];
         }
         else if(this.dmaLock){
             if(address >= 0xFF80 && address <= 0xFFFE){

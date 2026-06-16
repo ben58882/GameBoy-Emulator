@@ -7,7 +7,7 @@ public class Decompiler{
         try{
             FileWriter writer = new FileWriter(fileName, true);
             int size = single ? 1 : program.length;
-            int pc = 0x0100;
+            int pc = 0x0;
             String s = "";
             int imm = 0;
             while(pc < size){

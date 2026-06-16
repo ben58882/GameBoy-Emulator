@@ -1,3 +1,4 @@
+import java.util.Arrays;
 public class Ppu implements Memory{
 
     private int[] VRAM = new int[0x2000]; //0x8000 - 0x9FFF
@@ -27,12 +28,12 @@ public class Ppu implements Memory{
     private int[] register = new int[12];
 
     public GameBoyDisplay display;
-    private Gameboy gb;
+    public Gameboy gb;
     private long cycleCounter = 0;
 
     public Ppu(Gameboy gb){
 
-        this.display = new GameBoyDisplay();
+        this.display = new GameBoyDisplay(this);
         this.gb = gb;
         /* 
         //THIS IS ONLY CORRECT FOR INITIALISING pc = 0x0100
@@ -172,7 +173,7 @@ public class Ppu implements Memory{
             }
             this.display.renderFrame();
         }
-        else{
+        else if(state == 2){
             if((this.register[1] & 0x20) != 0){
                 this.gb.mmu.ifRegister[1] = 1;
             }
@@ -192,14 +193,33 @@ public class Ppu implements Memory{
     }
     //bug fix bg priority
     //bug fix added hud
+    private class Sprites{
+        int x;
+        int y;
+        int tile_id;
+        int attributes;
+        public Sprites(int y, int x, int tile_id, int attributes){
+            this.y = y - 16;
+            this.x = x - 8;
+            this.tile_id = tile_id;
+            this.attributes = attributes;
+        }
+    }
     private void drawScanline(){
 
         int frameArrIdx = (this.register[4] & 0xFF) * 160;
         int baseAddress = (this.register[0] & 0x8) == 0 ? 0x9800 : 0x9C00;
         int tile_data_base = (this.register[0] & 0x10) == 0 ? 0x9000 : 0x8000;
         int[] bgColor = new int[160];
+        boolean bgWindowEnabled = (this.register[0] & 1) != 0;
 
         for(int i = 0; i < 160; i++){
+            if(!bgWindowEnabled){
+                bgColor[i] = 0;
+                this.display.pixelBuffer[frameArrIdx] = 0xFFFFFFFF;
+                frameArrIdx++;
+                continue;
+            }
             int y_pos = (this.register[4] + this.register[2]) & 0xFF;
             int x_pos = (i + this.register[3]) & 0xFF;
             int tile_y = y_pos / 8;
@@ -216,7 +236,7 @@ public class Ppu implements Memory{
         }
 
         // added hud
-        boolean windowEnabled = (this.register[0] & 0x20) != 0;
+        boolean windowEnabled = ((this.register[0] & 0x20) != 0) && bgWindowEnabled;
         if(windowEnabled && this.register[4] >= this.register[10]){
             int windowY = this.register[4] - this.register[10];
             int windowBase = (this.register[0] & 0x40) == 0 ? 0x9800 : 0x9C00;
@@ -232,6 +252,7 @@ public class Ppu implements Memory{
                 int x_within = x_pos % 8;
                 int b1 = this.VRAM[tile_data_base + (signed_tile_id * 16) + (line_within_tile * 2) - vramAdjust];
                 int b2 = this.VRAM[tile_data_base + (signed_tile_id * 16) + (line_within_tile * 2) + 1 - vramAdjust];
+                bgColor[i] = getColorID(b1, b2, x_within);
                 this.display.pixelBuffer[(this.register[4] & 0xFF) * 160 + i] =
                     this.calculateColor(b1, b2, x_within, false, false);
             }
@@ -241,32 +262,41 @@ public class Ppu implements Memory{
             return;
         }
         int spriteHeight = (this.register[0] & 4) == 0 ? 8 : 16;
-        int[] sprites = new int[40];
+        /* 
+        int[] sprites = new int[10];
+        */
+        Sprites[] sprites = new Sprites[10];
         int spritesIdx = 0;
         for(int i = 0; i < 0xA0; i = i + 4){
             int spriteTop = this.OAM[i] - 16;
             if(this.register[4] >= spriteTop && this.register[4] < spriteTop + spriteHeight){
-                sprites[spritesIdx++] = this.OAM[i];
+                sprites[spritesIdx++] = 
+                    new Sprites(this.OAM[i], this.OAM[i + 1], this.OAM[i + 2], this.OAM[i + 3]);
+                /* 
                 sprites[spritesIdx++] = this.OAM[i + 1];
                 sprites[spritesIdx++] = this.OAM[i + 2];
                 sprites[spritesIdx++] = this.OAM[i + 3];
-                if(spritesIdx >= 40){
+                */
+                if(spritesIdx >= 10){
                     break;
                 }
             }
         }
 
-        for(int i = spritesIdx - 4; i >= 0; i -= 4){
+        // stable sort by x coordinate here
+        Arrays.sort(sprites, 0, spritesIdx, (a, b) -> Integer.compare(a.x, b.x));
 
-            int y = sprites[i] - 16;
-            int x = sprites[i + 1] - 8;
-            int tile_id = sprites[i + 2];
-            int attributes = sprites[i + 3];
+        for(int i = spritesIdx - 1; i >= 0; i--){
+
+            int y = sprites[i].y;
+            int x = sprites[i].x;
+            int tile_id = sprites[i].tile_id;
+            int attributes = sprites[i].attributes;
             if(spriteHeight == 16 && tile_id % 2 == 1) {tile_id -= 1;}
+            boolean colorPalette = (attributes & 0x10) != 0;
             int tileAddress = 0x8000 + (tile_id * 16);
 
             int row = (attributes & 0x40) == 0 ? this.register[4] - y : spriteHeight - 1 - (this.register[4] - y);
-            boolean colorPalette = (attributes & 0x10) != 0;
             int byte1 = this.VRAM[tileAddress + (row * 2) - vramAdjust];
             int byte2 = this.VRAM[tileAddress + (row * 2) + 1 - vramAdjust];
             for (int p = 0; p < 8; p++) {
@@ -304,13 +334,13 @@ public class Ppu implements Memory{
 
         switch(color){
             case 0:
-                return 0xFFFFFFFF;
+                return 0x9bbc0f;
             case 1:
-                return 0xFFAAAAAA;
+                return 0x8bac0f;
             case 2:
-                return 0xFF555555;
+                return 0x306230;
             case 3:
-                return 0xFF000000;
+                return 0x0f380f;
         }
         return -1;
     }

@@ -3,5 +3,6 @@
 .DS_Store
 *.txt
 TestRunner.java
-
+*.sav
+*.gbc
 

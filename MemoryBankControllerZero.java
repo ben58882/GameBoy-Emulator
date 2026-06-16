@@ -5,7 +5,7 @@ public class MemoryBankControllerZero implements MemoryBankController{
 
     private boolean ramPresent = false;
 
-    public MemoryBankControllerZero(byte[] data){
+    public MemoryBankControllerZero(String name, byte[] data){
         if(data[0x147] == 0x9){
             ramPresent = true;
         }
@@ -35,4 +35,7 @@ public class MemoryBankControllerZero implements MemoryBankController{
             }
         }
     }
+
+    @Override
+    public void saveRam(){}
 }

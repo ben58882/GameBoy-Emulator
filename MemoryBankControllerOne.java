@@ -1,5 +1,10 @@
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
 public class MemoryBankControllerOne implements MemoryBankController {
 
+    private String romName;
     private int[] romBank;
     private int romBanksNum;
 
@@ -13,9 +18,9 @@ public class MemoryBankControllerOne implements MemoryBankController {
     private int romBank5Bits = 1;
     private int ramBank2Bits = 0;
 
-    public MemoryBankControllerOne(byte[] data) {
+    public MemoryBankControllerOne(String romName, byte[] data) {
+        this.romName = romName;
         int cartType = (int)data[0x0147] & 0xFF;
-        //System.out.println(data.length);
         // 0x02 is MBC1+RAM, 0x03 is MBC1+RAM+BATTERY
         if (cartType == 0x02 || cartType == 0x03) {
             ramPresent = true;
@@ -43,6 +48,51 @@ public class MemoryBankControllerOne implements MemoryBankController {
         
         for (int i = 0; i < data.length; i++) {
             romBank[i] = (int)data[i] & 0xFF;
+        }
+        if(ramPresent){
+            this.loadRam();
+        }
+    }
+
+    private void loadRam(){
+        String saveFileName = romName + ".sav";
+        File saveFile = new File(saveFileName);
+        if (saveFile.exists() && saveFile.isFile()) {
+            System.out.println("Save file found! Loading data...");
+            try {
+                byte[] tmp = FileParser.parse(saveFileName);
+                for(int i = 0; i < tmp.length; i++){
+                    this.ramBank[i] = (int)tmp[i] & 0xFF;
+                }
+            } catch (Exception e) {
+                System.err.println("Corrupted save file");
+                System.exit(1);
+            }
+        }
+        else{
+            System.out.println("No save file found. Initializing empty RAM.");
+        }
+    }
+    
+    @Override
+    public void saveRam(){
+        if(!this.ramPresent){
+            return;
+        }
+        String saveFileName = romName + ".sav";
+        try {
+            FileOutputStream fos = new FileOutputStream(saveFileName);
+            byte[] tmp = new byte[this.ramBank.length];
+            for(int i = 0; i < this.ramBank.length; i++){
+                tmp[i] = (byte)this.ramBank[i];
+            }
+            fos.write(tmp); 
+        
+            fos.close();
+            System.out.println("Save successful!");
+        
+        } catch (IOException e) {
+            e.printStackTrace();
         }
     }
 
