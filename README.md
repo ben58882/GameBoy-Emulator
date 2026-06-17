@@ -72,5 +72,8 @@ https://github.com/libretro/SameBoy
 Generated custom boot up logo via catskull logo generator website
 https://catskull.net/GB-Logo-Generator/
 
+**Web-Based Version**
+
+https://ben58882.github.io/Game-Boy-Emulator-Online/
 
 
